@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D月相盈亏与昼夜交替模拟仿真平台</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; color: #fff; font-family: sans-serif; }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.7); /* 深色背景 */
+            backdrop-filter: blur(10px); /* 磨砂玻璃效果核心 */
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* 隐藏滑块默认样式，自定义科技感外观 */
+        input[type="range"] { -webkit-appearance: none; appearance: none; background: rgba(255,255,255,0.1); height: 6px; border-radius: 3px; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #3b82f6; cursor: pointer; box-shadow: 0 0 10px #3b82f6; }
+    </style>
+</head>
+<body class="w-screen h-screen flex relative">
+
+    <div id="threejs-container" class="w-[70%] h-full relative">
+        <div class="absolute top-6 left-6 p-4 glass-panel rounded-xl pointer-events-none z-10">
+            <h1 class="text-xl font-bold text-white flex items-center gap-2">
+                <span class="inline-block w-3 h-3 rounded-full bg-blue-500 animate-pulse"></span>
+                3D 宇宙模拟视角
+            </h1>
+            <p class="text-xs text-slate-400 mt-1">💡 鼠标左键拖拽旋转 | 滚轮缩放</p>
+        </div>
+    </div>
+
+    <div class="w-[30%] h-full p-6 glass-panel border-l border-slate-800 flex flex-col justify-between z-10 overflow-y-auto">
+        <div>
+            <div class="mb-6">
+                <h2 class="text-lg font-bold text-blue-400 border-b border-slate-700 pb-2 mb-3">📍 月相阶段与定义 </h2>
+                <div id="phase-definitions" class="space-y-2 text-sm">
+                    <p class="text-xs text-slate-400 italic">当前状态：<span id="current-phase-desc" class="text-blue-400 font-bold">新月</span></p>
+                    <div id="def-朔" class="p-2 rounded bg-blue-500/10 border-l-4 border-blue-500 transition-all">
+                        <span class="font-semibold text-white">新月 (朔)：</span>阴历初一。日地月一线，月暗面朝地。
+                    </div>
+                    <div id="def-上弦" class="p-2 rounded transition-all opacity-40">
+                        <span class="font-semibold text-white">上弦月：</span>初七、初八。距角90°，西半边亮。
+                    </div>
+                    <div id="def-望" class="p-2 rounded transition-all opacity-40">
+                        <span class="font-semibold text-white">满月 (望)：</span>十五、十六。地球居中，亮面全朝地。
+                    </div>
+                    <div id="def-下弦" class="p-2 rounded transition-all opacity-40">
+                        <span class="font-semibold text-white">下弦月：</span>二十二、二十三。距角270°，东半边亮。
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <h2 class="text-lg font-bold text-blue-400 border-b border-slate-700 pb-2 mb-3">📊 月相运动规律表 (图三常驻)</h2>
+                <div class="overflow-x-auto text-xs">
+                    <table id="law-table" class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="text-slate-400 border-b border-slate-700 bg-slate-800/50">
+                                <th class="p-2">月相</th>
+                                <th class="p-2">距角</th>
+                                <th class="p-2">月出</th>
+                                <th class="p-2">中天</th>
+                                <th class="p-2">月落</th>
+                                <th class="p-2">见月方位</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr id="row-朔" class="border-b border-slate-800 transition-all bg-blue-600/20 font-bold text-white">
+                                <td class="p-2">新月</td>
+                                <td class="p-2">0°</td>
+                                <td class="p-2">清晨</td>
+                                <td class="p-2">正午</td>
+                                <td class="p-2">黄昏</td>
+                                <td class="p-2">彻夜无月</td>
+                            </tr>
+                            <tr id="row-上弦" class="border-b border-slate-800 transition-all opacity-50">
+                                <td class="p-2">上弦月</td>
+                                <td class="p-2">90°</td>
+                                <td class="p-2">正午</td>
+                                <td class="p-2">黄昏</td>
+                                <td class="p-2">半夜</td>
+                                <td class="p-2">上半夜西天</td>
+                            </tr>
+                            <tr id="row-望" class="border-b border-slate-800 transition-all opacity-50">
+                                <td class="p-2">满月</td>
+                                <td class="p-2">180°</td>
+                                <td class="p-2">黄昏</td>
+                                <td class="p-2">半夜</td>
+                                <td class="p-2">清晨</td>
+                                <td class="p-2">通宵可见</td>
+                            </tr>
+                            <tr id="row-下弦" class="border-b border-slate-800 transition-all opacity-50">
+                                <td class="p-2">下弦月</td>
+                                <td class="p-2">270°</td>
+                                <td class="p-2">半夜</td>
+                                <td class="p-2">清晨</td>
+                                <td class="p-2">正午</td>
+                                <td class="p-2">下半夜东天</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4 pt-4 border-t border-slate-800 text-xs text-slate-500">
+            教材参考：人教版高中地理必修一 · 第一章第一节
+        </div>
+    </div>
+
+    <div class="absolute bottom-6 left-6 w-[66%] h-24 p-4 glass-panel rounded-2xl flex items-center justify-between gap-8 z-10">
+        <div class="flex-1">
+            <div class="flex justify-between mb-1 text-sm">
+                <span class="text-blue-400 font-bold">📅 阴历日期轴 (控制月球公转)</span>
+                <span id="date-label" class="text-white bg-blue-600 px-2 py-0.5 rounded text-xs">初一 (朔)</span>
+            </div>
+            <input type="range" id="slider-date" min="1" max="30" value="1" class="w-full cursor-pointer">
+        </div>
+
+        <div class="h-full w-px bg-slate-700"></div>
+
+        <div class="flex-1">
+            <div class="flex justify-between mb-1 text-sm">
+                <span class="text-amber-400 font-bold">⏰ 一天时间轴 (控制地球自转)</span>
+                <span id="time-label" class="text-white bg-amber-600 px-2 py-0.5 rounded text-xs">12:00 (正午)</span>
+            </div>
+            <input type="range" id="slider-time" min="0" max="1440" value="720" class="w-full cursor-pointer">
+        </div>
+    </div>
+
+    <script>
+        // --- 初始化场景、相机、渲染器 ---
+        const container = document.getElementById('threejs-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x020208); // 深邃星空背景色
+
+        // 添加背景恒星点阵 (星空)
+        const starGeometry = new THREE.BufferGeometry();
+        const starVertices = [];
+        for (let i = 0; i < 2000; i++) {
+            starVertices.push(
+                (Math.random() - 0.5) * 200, 
+                (Math.random() - 0.5) * 200, 
+                (Math.random() - 0.5) * 200
+            );
+        }
+        starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+        const starMaterial = new THREE.PointsMaterial({ color: 0xcccccc, size: 0.1 });
+        const stars = new THREE.Points(starGeometry, starMaterial);
+        scene.add(stars);
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(0, 15, 30); // 预设一个俯视偏远视角
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.shadowMap.enabled = true; // 启用阴影
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; // 启用阻尼效果，增加鼠标操作的沉浸感
+        controls.maxDistance = 60;
+        controls.minDistance = 5;
+
+        // --- 建立天体模型与光源 ---
+        // 太阳灯光 (远处的强光源)
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        sunLight.position.set(50, 0, 0); // 太阳固定在遥远的右侧
+        sunLight.castShadow = true; // 太阳光投射阴影
+        scene.add(sunLight);
+
+        const sunVisualGeo = new THREE.SphereGeometry(2, 32, 32);
+        const sunVisualMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+        const sunVisual = new THREE.Mesh(sunVisualGeo, sunVisualMat);
+        sunVisual.position.set(40, 0, 0); // 太阳自身的视觉本体
+        scene.add(sunVisual);
+
+        // 地球 (位于场景中心，高精度地球表面网格)
+        const earthGroup = new THREE.Group();
+        scene.add(earthGroup);
+
+        const earthGeo = new THREE.SphereGeometry(3, 32, 32);
+        // 使用物理网格材质，以获得自然的明暗和阴影
+        const earthMat = new THREE.MeshStandardMaterial({ 
+            color: 0x1d4ed8, 
+            roughness: 0.8,
+            metalness: 0.1
+        });
+        const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+        earthMesh.receiveShadow = true; // 地球接收阴影 (但月球太小且远，实际上月球阴影不太投给地球，只接收来自太阳光的晨昏线)
+        earthGroup.add(earthMesh);
+
+        // 给地球加几个绿色陆地参考板块，以方便观察自转
+        const landGeo = new THREE.BoxGeometry(1, 1, 0.2);
+        const landMat = new THREE.MeshStandardMaterial({ color: 0x15803d });
+        const landPlate = new THREE.Mesh(landGeo, landMat);
+        landPlate.position.set(0, 0, 3); // 放在地球表面
+        earthGroup.add(landPlate);
+
+        // 月球 (围绕地球公转)
+        const moonGeo = new THREE.SphereGeometry(0.8, 32, 32);
+        const moonMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.9 });
+        const moonMesh = new THREE.Mesh(moonGeo, moonMat);
+        scene.add(moonMesh);
+
+        // --- 双轴控制逻辑实现 ---
+        const sliderDate = document.getElementById('slider-date');
+        const sliderTime = document.getElementById('slider-time');
+        
+        const dateLabel = document.getElementById('date-label');
+        const timeLabel = document.getElementById('time-label');
+        const currentPhaseDesc = document.getElementById('current-phase-desc');
+
+        // UI Panel 高亮引用
+        const defs = { 朔: document.getElementById('def-朔'), 上弦: document.getElementById('def-上弦'), 望: document.getElementById('def-望'), 下弦: document.getElementById('def-下弦') };
+        const rows = { 朔: document.getElementById('row-朔'), 上弦: document.getElementById('row-上弦'), 望: document.getElementById('row-望'), 下弦: document.getElementById('row-下弦') };
+
+        const moonOrbitRadius = 15; // 月球公转轨道半径
+
+        // 更新模拟状态的核心函数
+        function updateSimulation() {
+            const dateVal = parseInt(sliderDate.value);
+            const timeVal = parseInt(sliderTime.value);
+
+            // A. 处理日期轴 (控制月球公转、月相、表格高亮)
+            const angle = ((dateVal - 1) / 30) * Math.PI * 2; // 初一时角度为0
+            moonMesh.position.set(
+                Math.cos(angle) * moonOrbitRadius,
+                0,
+                -Math.sin(angle) * moonOrbitRadius
+            );
+
+            // 更新日期文字与月相文字描述
+            let dateText = `初一 (朔)`;
+            let activePhaseId = '朔';
+
+            if (dateVal === 1) { dateText = `初一 (朔)`; activePhaseId = '朔'; currentPhaseDesc.innerText = "新月"; }
+            else if (dateVal > 1 && dateVal < 7) { dateText = `初${dateVal} (蛾眉月)`; activePhaseId = '朔'; currentPhaseDesc.innerText = "新月阶段"; }
+            else if (dateVal >= 7 && dateVal <= 9) { dateText = `初${dateVal} (上弦月)`; activePhaseId = '上弦'; currentPhaseDesc.innerText = "上弦月"; }
+            else if (dateVal > 9 && dateVal < 15) { dateText = `农历十一 (凸月渐盈)`; activePhaseId = '上弦'; currentPhaseDesc.innerText = "上弦阶段"; }
+            else if (dateVal >= 15 && dateVal <= 16) { dateText = `农历${dateVal} (满月/望)`; activePhaseId = '望'; currentPhaseDesc.innerText = "满月"; }
+            else if (dateVal > 16 && dateVal < 22) { dateText = `农历${dateVal} (凸月渐亏)`; activePhaseId = '望'; currentPhaseDesc.innerText = "满月阶段"; }
+            else if (dateVal >= 22 && dateVal <= 24) { dateText = `农历${dateVal} (下弦月)`; activePhaseId = '下弦'; currentPhaseDesc.innerText = "下弦月"; }
+            else { dateText = `农历${dateVal} (残月)`; activePhaseId = '下弦'; currentPhaseDesc.innerText = "下弦阶段"; }
+
+            dateLabel.innerText = dateText;
+
+            // 逻辑与表格高亮同步切换
+            Object.keys(defs).forEach(key => {
+                if (key === activePhaseId) {
+                    defs[key].classList.remove('opacity-40');
+                    defs[key].classList.add('bg-blue-500/10', 'border-l-4', 'border-blue-500');
+                    rows[key].classList.remove('opacity-50');
+                    rows[key].classList.add('bg-blue-600/20', 'font-bold', 'text-white');
+                } else {
+                    defs[key].classList.add('opacity-40');
+                    defs[key].classList.remove('bg-blue-500/10', 'border-l-4', 'border-blue-500');
+                    rows[key].classList.add('opacity-50');
+                    rows[key].classList.remove('bg-blue-600/20', 'font-bold', 'text-white');
+                }
+            });
+
+            // B. 处理时间轴 (控制地球自转，即一天)
+            // timeVal 范围 0 到 1440 (即 24 * 60 分钟)
+            const dayProgress = timeVal / 1440; // 0 到 1
+            earthGroup.rotation.y = dayProgress * Math.PI * 2; // 地球绕其自转轴旋转
+
+            // 更新时间文字标签
+            const hours = String(Math.floor(timeVal / 60)).padStart(2, '0');
+            const mins = String(timeVal % 60).padStart(2, '0');
+            let timeText = `${hours}:${mins}`;
+            if(hours == '12' && mins == '00') timeText += " (正午)";
+            if(hours == '00' && mins == '00') timeText += " (子夜)";
+            timeLabel.innerText = timeText;
+        }
+
+        // 监听滑块输入事件，实现实时联动
+        sliderDate.addEventListener('input', updateSimulation);
+        sliderTime.addEventListener('input', updateSimulation);
+
+        // 初始化第一次渲染
+        updateSimulation();
+
+        // --- 动画循环与自适应渲染 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update(); // 视角控制器平滑
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 窗口拉伸时自动调整 Three.js 视窗大小
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+    </script>
+</body>
+</html>
